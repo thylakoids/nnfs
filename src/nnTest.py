@@ -1,28 +1,137 @@
 import unittest
 import numpy as np
 from nnfs.datasets import spiral_data
+import matplotlib.pyplot as plt
+from thylakoids.time_code import code_timer
 
-
-from nn.nn import Layer_Dense, Activation_Softmax, Activation_Sigmoid
+from nn.nn import Layer_Dense, Activation_Softmax, Activation_Sigmoid, Activation_ReLU, Loss_CategoricalCrossentropy, Loss_Crossentropy, Activation_Softmax_Loss_CategoricalCrossentropy
 
 np.random.seed(0)
 
 
 class Testnn(unittest.TestCase):
     X, y = spiral_data(100, 3)
+    plot = False
 
-    def test_nn(self):
+    def test_crossEntropy(self):
+        samples = self.X.shape[0]
+
+        y_predict = np.random.randn(samples, 3)
+        y_true = np.zeros([samples, 3])
+        y_true[range(samples), self.y] = 1
+
+        loss_Crossentropy = Loss_Crossentropy()
+        loss_CategoricalCrossentropy = Loss_CategoricalCrossentropy()
+
+        with code_timer('loss1'):
+            loss1 = loss_Crossentropy.calculate(y_predict, y_true)
+        with code_timer():
+            loss2 = loss_CategoricalCrossentropy.calculate(y_predict, y_true)
+        self.assertEqual(loss1, loss2)
+
+    def test_backward_softmax_crossEntropy(self):
+        softmax_outputs = np.array([[0.7, 0.1, 0.2], [0.1, 0.5, 0.4],
+                                    [0.02, 0.9, 0.08]])
+        class_targets = np.array([0, 1, 1])
+
+        softmax_loss = Activation_Softmax_Loss_CategoricalCrossentropy()
+        softmax_loss.backward(softmax_outputs, class_targets)
+        dvalues1 = softmax_loss.dinputs
+
+        activation = Activation_Softmax()
+        activation.output = softmax_outputs
+        loss = Loss_CategoricalCrossentropy()
+        loss.backward(softmax_outputs, class_targets)
+        activation.backward(loss.dinputs)
+        dvalues2 = activation.dinputs
+
+        self.assertEqual(dvalues1[0, 0], dvalues2[0, 0])
+
+    def test_nn1(self):
         layer1 = Layer_Dense(2, 5)
         activation1 = Activation_Sigmoid()
 
         layer2 = Layer_Dense(5, 3)
         activation2 = Activation_Softmax()
 
+        loss_function = Loss_CategoricalCrossentropy()
+
         layer1.forward(self.X)
         activation1.forward(layer1.output)
         layer2.forward(activation1.output)
         activation2.forward(layer2.output)
+        loss = loss_function.calculate(activation2.output, self.y)
+        print(f"loss: {loss}")
+
+        predictions = np.argmax(activation2.output, axis=1)
+        y = self.y
+        if len(y.shape) == 2:
+            y = np.argmax(self.y, axis=1)
+        accuracy = np.mean(predictions == y)
+        print('acc:', accuracy)
+
         self.assertEqual(activation2.output.shape, (300, 3))
+
+    def test_nn2(self):
+        """test_nn2
+        1. combine softmax and cross entropy loss
+        2. forward and backward
+        :return:
+        """
+
+        layer1 = Layer_Dense(2, 5)
+        activation1 = Activation_Sigmoid()
+
+        layer2 = Layer_Dense(5, 3)
+        loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
+
+        # Forward pass
+        layer1.forward(self.X)
+        activation1.forward(layer1.output)
+        layer2.forward(activation1.output)
+        loss = loss_activation.forward(layer2.output, self.y)
+        print(f"loss: {loss}")
+
+        # Accuracy
+        predictions = np.argmax(loss_activation.output, axis=1)
+        y = self.y
+        if len(y.shape) == 2:
+            y = np.argmax(self.y, axis=1)
+        accuracy = np.mean(predictions == y)
+        print('acc:', accuracy)
+
+        # Backward pass
+        loss_activation.backward(loss_activation.output, self.y)
+        layer2.backward(loss_activation.dinputs)
+        activation1.backward(layer2.dinputs)
+        layer1.backward(activation1.dinputs)
+
+        self.assertEqual(layer1.dweights.shape, (2, 5))
+        self.assertEqual(loss_activation.output.shape, (300, 3))
+
+    def test_Activation_Sigmoid(self):
+        X = np.linspace(-4, 4, 100)
+        activation = Activation_Sigmoid()
+        y = activation.forward(X)
+        if self.plot:
+            plt.plot(X, y)
+            plt.xlabel("X")
+            plt.ylabel("y")
+            plt.title("sigmoid function")
+            plt.show()
+        self.assertEqual(y.shape, (100, ))
+
+    def test_Activation_ReLU(self):
+        X = np.linspace(-4, 4, 100)
+        activation = Activation_ReLU()
+        y = activation.forward(X)
+        if self.plot:
+            plt.plot(X, y)
+            plt.xlabel("X")
+            plt.ylabel("y")
+            plt.title("ReLU function")
+            plt.show()
+        self.assertEqual(y.shape, (100, ))
 
 
 if __name__ == "__main__":
