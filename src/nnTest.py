@@ -4,13 +4,18 @@ from nnfs.datasets import spiral_data
 import matplotlib.pyplot as plt
 from thylakoids.time_code import code_timer
 
-from nn.nn import Layer_Dense, Activation_Softmax, Activation_Sigmoid, Activation_ReLU, Loss_CategoricalCrossentropy, Loss_Crossentropy, Activation_Softmax_Loss_CategoricalCrossentropy
+from nn.nn import (Layer_Dense, Activation_Softmax, Activation_Sigmoid,
+                   Activation_ReLU, Loss_CategoricalCrossentropy,
+                   Loss_Crossentropy,
+                   Activation_Softmax_Loss_CategoricalCrossentropy,
+                   Optimizer_SGD)
 
 np.random.seed(0)
 
 
 class Testnn(unittest.TestCase):
-    X, y = spiral_data(100, 3)
+    # X:300*2, y:300*1
+    X, y = spiral_data(samples=100, classes=3)
     plot = False
 
     def test_crossEntropy(self):
@@ -132,6 +137,100 @@ class Testnn(unittest.TestCase):
             plt.title("ReLU function")
             plt.show()
         self.assertEqual(y.shape, (100, ))
+
+    def test_train_model(self):
+        # create model
+        dense1 = Layer_Dense(2, 64)
+        activation1 = Activation_ReLU()
+
+        dense2 = Layer_Dense(64, 3)
+        loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
+
+        # create optimizer
+        optimizer = Optimizer_SGD()
+
+        # Train in loop
+        for epoch in range(10001):
+            # perform forward pass
+            dense1.forward(self.X)
+            activation1.forward(dense1.output)
+
+            dense2.forward(activation1.output)
+            loss = loss_activation.forward(dense2.output, self.y)
+
+            # calculate accuracy
+            predictions = np.argmax(loss_activation.output, axis=1)
+            if len(self.y.shape) == 2:
+                self.y = np.argmax(self.y, axis=1)
+            accuracy = np.mean(predictions == self.y)
+
+            if not epoch % 100:
+                print(f'epoch: {epoch}, acc: {accuracy:.3f}, loss: {loss:.3f}')
+
+            # perform backward pass
+            loss_activation.backward(loss_activation.output, self.y)
+            dense2.backward(loss_activation.dinputs)
+            activation1.backward(dense2.dinputs)
+            dense1.backward(activation1.dinputs)
+
+            # update parameters
+            optimizer.update_params(dense1)
+            optimizer.update_params(dense2)
+
+    def test_optimizer_SGD(self):
+        # create model
+        dense1 = Layer_Dense(2, 64)
+        activation1 = Activation_ReLU()
+
+        dense2 = Layer_Dense(64, 3)
+        loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
+
+        # create optimizer
+        optimizer = Optimizer_SGD()
+
+        # perform forward pass
+        dense1.forward(self.X)
+        activation1.forward(dense1.output)
+
+        dense2.forward(activation1.output)
+        loss = loss_activation.forward(dense2.output, self.y)
+
+        print(f'loss: {loss}')
+
+        # calculate accuracy
+        predictions = np.argmax(loss_activation.output, axis=1)
+        if len(self.y.shape) == 2:
+            self.y = np.argmax(self.y, axis=1)
+        accuracy = np.mean(predictions == self.y)
+
+        print(f'acc: {accuracy}')
+
+        # perform backward pass
+        loss_activation.backward(loss_activation.output, self.y)
+        dense2.backward(loss_activation.dinputs)
+        activation1.backward(dense2.dinputs)
+        dense1.backward(activation1.dinputs)
+
+        # update parameters
+        optimizer.update_params(dense1)
+        optimizer.update_params(dense2)
+
+        # perform forward pass #2
+        dense1.forward(self.X)
+        activation1.forward(dense1.output)
+
+        dense2.forward(activation1.output)
+        loss = loss_activation.forward(dense2.output, self.y)
+
+        print(f'loss: {loss}')
+
+        # calculate accuracy
+        predictions = np.argmax(loss_activation.output, axis=1)
+        if len(self.y.shape) == 2:
+            self.y = np.argmax(self.y, axis=1)
+        accuracy = np.mean(predictions == self.y)
+
+        print(f'acc: {accuracy}')
 
 
 if __name__ == "__main__":

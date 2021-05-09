@@ -14,7 +14,7 @@ class Layer_Dense:
     def backward(self, dvalues):
         # Gradients on parameters
         self.dweights = np.dot(self.inputs.T, dvalues)
-        self.dbaises = np.sum(dvalues, axis=0, keepdims=True)
+        self.dbiases = np.sum(dvalues, axis=0, keepdims=True)
 
         # Gradient on values
         self.dinputs = np.dot(dvalues, self.weights.T)
@@ -126,7 +126,19 @@ class Activation_Softmax_Loss_CategoricalCrossentropy():
         self.dinputs = self.dinputs / samples
 
 
+class Optimizer_SGD:
+    def __init__(self, learning_rate=1.0):
+        self.learning_rate = learning_rate
+
+    def update_params(self, layer):
+        layer.weights += -self.learning_rate * layer.dweights
+        layer.biases += -self.learning_rate * layer.dbiases
+
+
 class Loss_Crossentropy(Loss):
+    """
+    my own implementation
+    """
     def forward(self, y_pred, y_true):
         y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7)
         if y_pred.shape != y_true.shape:
