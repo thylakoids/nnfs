@@ -200,17 +200,3 @@ class Optimizer_SGD:
 
     def post_update_params(self):
         self.iterations += 1
-
-
-# class Loss_Crossentropy(Loss):
-#     """
-#     my own implementation
-#     """
-#     def forward(self, y_pred, y_true):
-#         y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7)
-#         if y_pred.shape != y_true.shape:
-#             raise ValueError(
-#                 f"y_pred.shape != y_true.shape: {y_pred.shape}!={y_true.shape}"
-#             )
-
-#         return -np.sum(np.log(y_pred) * y_true, axis=1)
