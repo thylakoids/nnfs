@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import nnfs
 from nnfs.datasets import spiral_data
 import matplotlib.pyplot as plt
 from thylakoids.time_code import code_timer
@@ -11,6 +12,7 @@ from nn.nn import (Layer_Dense, Activation_Softmax, Activation_Sigmoid,
                    Optimizer_SGD)
 
 np.random.seed(0)
+# nnfs.init()
 
 
 class Testnn(unittest.TestCase):
@@ -50,7 +52,7 @@ class Testnn(unittest.TestCase):
         activation.backward(loss.dinputs)
         dvalues2 = activation.dinputs
 
-        self.assertEqual(dvalues1[0, 0], dvalues2[0, 0])
+        self.assertAlmostEqual(dvalues1[0, 0], dvalues2[0, 0])
 
     def test_nn1(self):
         layer1 = Layer_Dense(2, 5)
@@ -147,10 +149,12 @@ class Testnn(unittest.TestCase):
         loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
 
         # create optimizer
-        optimizer = Optimizer_SGD()
+        optimizer = Optimizer_SGD(2)
+        accs = []
+        losses = []
 
         # Train in loop
-        for epoch in range(10001):
+        for epoch in range(10001)[:10]:
             # perform forward pass
             dense1.forward(self.X)
             activation1.forward(dense1.output)
@@ -164,8 +168,12 @@ class Testnn(unittest.TestCase):
                 self.y = np.argmax(self.y, axis=1)
             accuracy = np.mean(predictions == self.y)
 
+            accs.append(accuracy)
+            losses.append(loss)
             if not epoch % 100:
-                print(f'epoch: {epoch}, acc: {accuracy:.3f}, loss: {loss:.3f}')
+                print(
+                    f'epoch: {epoch}, acc: {accuracy:.3f}, loss: {loss:.3f}, lr: {optimizer.current_learning_rate:.3f}'
+                )
 
             # perform backward pass
             loss_activation.backward(loss_activation.output, self.y)
@@ -174,8 +182,23 @@ class Testnn(unittest.TestCase):
             dense1.backward(activation1.dinputs)
 
             # update parameters
+            optimizer.pre_update_params()
             optimizer.update_params(dense1)
             optimizer.update_params(dense2)
+            optimizer.post_update_params()
+
+        if self.plot:
+            plt.figure()
+            plt.subplot(211)
+            plt.plot(accs)
+            plt.ylabel('acc')
+
+            plt.subplot(212)
+            plt.plot(losses)
+            plt.xlabel('epoch')
+            plt.ylabel('loss')
+
+            plt.show()
 
     def test_optimizer_SGD(self):
         # create model
@@ -196,6 +219,11 @@ class Testnn(unittest.TestCase):
         loss = loss_activation.forward(dense2.output, self.y)
 
         print(f'loss: {loss}')
+
+        # check gradient
+        dense1.check_gradient()
+        activation1.check_gradient()
+        dense2.check_gradient()
 
         # calculate accuracy
         predictions = np.argmax(loss_activation.output, axis=1)

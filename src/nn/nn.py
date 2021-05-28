@@ -16,7 +16,32 @@ class Layer:
     def backward(self, doutput=1):
         raise NotImplementedError
 
+    def check_gradient(self, to_be_check):
+        """check_gradient
+        self.backward(np.ones_like(self.output))
+        to_be_check = [[self.weights, self.dweights],
+                       [self.biases, self.dbiases],
+                       [self.inputs, self.dinputs]]
+        super().check_gradient(to_be_check)
+        """
+        delta = 1e-9
+        tollerance = 1e-3
+        loss = np.sum(self.output)
 
+        for x, dx in to_be_check:
+            x_shape = x.shape
+            for i in range(x_shape[0]):
+                for j in range(x_shape[1]):
+                    x[i][j] += delta
+                    self.forward(self.inputs)
+                    loss_delta = np.sum(self.output) - loss
+                    dx_ij_numerical = loss_delta / delta
+                    diff = np.abs(
+                        (dx_ij_numerical - dx[i][j]) /
+                        dx[i][j]) if dx[i][j] else np.abs(dx_ij_numerical)
+
+                    assert diff < tollerance
+                    x[i][j] -= delta
 
 
 class Layer_Dense(Layer):
@@ -39,8 +64,15 @@ class Layer_Dense(Layer):
         # Gradient on values
         self.dinputs = np.dot(dvalues, self.weights.T)
 
+    def check_gradient(self):
+        self.backward(np.ones_like(self.output))
+        to_be_check = [[self.weights, self.dweights],
+                       [self.biases, self.dbiases],
+                       [self.inputs, self.dinputs]]
+        super().check_gradient(to_be_check)
 
-class Activation_ReLU:
+
+class Activation_ReLU(AutoGrad):
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         self.inputs = inputs
         self.output = np.maximum(0, inputs)
@@ -50,8 +82,13 @@ class Activation_ReLU:
         self.dinputs = dvalues.copy()
         self.dinputs[self.inputs < 0] = 0
 
+    def check_gradient(self):
+        self.backward(np.ones_like(self.output))
+        to_be_check = [(self.inputs, self.dinputs)]
+        return super().check_gradient(to_be_check)
 
-class Activation_Sigmoid:
+
+class Activation_Sigmoid(AutoGrad):
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         self.inputs = inputs
         self.output = 1 / (1 + np.exp(-1 * inputs))
@@ -59,6 +96,11 @@ class Activation_Sigmoid:
 
     def backward(self, dvalues):
         self.dinputs = self.inputs * (1 - self.inputs)
+
+    def check_gradient(self):
+        self.backward(np.ones_like(self.output))
+        to_be_check = [(self.inputs, self.dinputs)]
+        return super().check_gradient(to_be_check)
 
 
 class Activation_Softmax:
@@ -141,12 +183,23 @@ class Activation_Softmax_Loss_CategoricalCrossentropy():
 
 
 class Optimizer_SGD:
-    def __init__(self, learning_rate=1.0):
+    def __init__(self, learning_rate=1.0, decay=0.):
         self.learning_rate = learning_rate
+        self.current_learning_rate = learning_rate
+        self.decay = decay
+        self.iterations = 0
 
     def update_params(self, layer):
-        layer.weights += -self.learning_rate * layer.dweights
-        layer.biases += -self.learning_rate * layer.dbiases
+        layer.weights += -self.current_learning_rate * layer.dweights
+        layer.biases += -self.current_learning_rate * layer.dbiases
+
+    def pre_update_params(self):
+        if self.decay:
+            self.current_learning_rate = self.learning_rate * (
+                1. / (1. + self.decay * self.iterations))
+
+    def post_update_params(self):
+        self.iterations += 1
 
 
 # class Loss_Crossentropy(Loss):
