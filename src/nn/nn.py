@@ -1,8 +1,28 @@
 import numpy as np
 
 
-class Layer_Dense:
+class Layer:
+    def __init__(self):
+        # there might be multiple input, consider using a list to represent
+        # inputs
+        self.inputs = None
+        self.output = None
+
+    def forward(self, *inputs):
+        # self.inputs = inputs
+        # return self.output
+        raise NotImplementedError
+
+    def backward(self, doutput=1):
+        raise NotImplementedError
+
+
+
+
+class Layer_Dense(Layer):
     def __init__(self, n_inputs, n_neurons):
+        super().__init__()
+
         self.weights = 0.10 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
 
@@ -65,18 +85,12 @@ class Activation_Softmax:
             self.dinputs[index] = np.dot(jacobian_matrix, single_dvalues)
 
 
-class Loss:
-    def calculate(self, output, y):
-        sample_losses = self.forward(output, y)
-        data_loss = np.mean(sample_losses)
-        return data_loss
+class Loss_CategoricalCrossentropy(Layer):
+    def __init__(self):
+        super().__init__()
 
-    def forward(self, output, y):
-        raise NotImplementedError("forward: not implemented!")
-
-
-class Loss_CategoricalCrossentropy(Loss):
     def forward(self, y_pred, y_true):
+        self.inputs = [y_pred, y_true]
         samples = len(y_pred)
 
         y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
@@ -90,20 +104,20 @@ class Loss_CategoricalCrossentropy(Loss):
                 f"The shape of y_pred is not supported: {y_pred.shape}.")
 
         negative_log_likelihoods = -np.log(correct_confidences)
-        return negative_log_likelihoods
+        self.output = np.mean(negative_log_likelihoods)
+        return self.output
 
-    def backward(self, dvalues, y_true):
-        samples = len(dvalues)
-
-        labels = len(dvalues[0])
+    def backward(self, dvalues=1):
+        y_pred, y_true = self.inputs
 
         if len(y_true.shape) == 1:
+            labels = len(y_pred[0])
             y_true = np.eye(labels)[y_true]
 
-        self.dinputs = -y_true / dvalues
+        self.dy_pred = -y_true / y_pred
         # Normalize gradient
         # so that, we don't need to normalize gradient when perform optimization
-        self.dinputs = self.dinputs / samples
+        self.dy_pred = self.dy_pred / len(y_pred)
 
 
 class Activation_Softmax_Loss_CategoricalCrossentropy():
@@ -135,15 +149,15 @@ class Optimizer_SGD:
         layer.biases += -self.learning_rate * layer.dbiases
 
 
-class Loss_Crossentropy(Loss):
-    """
-    my own implementation
-    """
-    def forward(self, y_pred, y_true):
-        y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7)
-        if y_pred.shape != y_true.shape:
-            raise ValueError(
-                f"y_pred.shape != y_true.shape: {y_pred.shape}!={y_true.shape}"
-            )
+# class Loss_Crossentropy(Loss):
+#     """
+#     my own implementation
+#     """
+#     def forward(self, y_pred, y_true):
+#         y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7)
+#         if y_pred.shape != y_true.shape:
+#             raise ValueError(
+#                 f"y_pred.shape != y_true.shape: {y_pred.shape}!={y_true.shape}"
+#             )
 
-        return -np.sum(np.log(y_pred) * y_true, axis=1)
+#         return -np.sum(np.log(y_pred) * y_true, axis=1)
