@@ -26,6 +26,7 @@ class Testnn(unittest.TestCase):
         activation2 = Activation_Sigmoid()
         activation3 = Activation_Softmax()
         loss = Loss_CategoricalCrossentropy()
+        softmax_loss = Activation_Softmax_Loss_CategoricalCrossentropy()
 
         # forward
         dense1.forward(self.X)
@@ -33,6 +34,7 @@ class Testnn(unittest.TestCase):
         activation2.forward(dense1.output)
         activation3.forward(dense1.output)
         loss.forward([activation3.output, self.y])
+        softmax_loss.forward([dense1.output, self.y])
 
         # check
         dense1.check_gradient()
@@ -40,6 +42,7 @@ class Testnn(unittest.TestCase):
         activation2.check_gradient()
         activation3.check_gradient()
         loss.check_gradient()
+        softmax_loss.check_gradient()
 
 
 if __name__ == "__main__":

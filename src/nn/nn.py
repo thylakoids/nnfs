@@ -189,24 +189,34 @@ class Loss_CategoricalCrossentropy(Layer):
         return super().check_gradient(to_be_check_fun=to_be_check_fun)
 
 
-class Activation_Softmax_Loss_CategoricalCrossentropy():
+class Activation_Softmax_Loss_CategoricalCrossentropy(Layer):
     def __init__(self):
+        super().__init__()
         self.activation = Activation_Softmax()
         self.loss = Loss_CategoricalCrossentropy()
 
-    def forward(self, inputs, y_true):
-        self.activation.forward(inputs)
-        self.output = self.activation.output
-        return self.loss.calculate(self.output, y_true)
+    def forward(self, inputs):
+        self.inputs = inputs
+        input, y_true = inputs
+        self.activation.forward(input)
+        self.output = self.loss.forward([self.activation.output, y_true])
+        return self.output
 
-    def backward(self, dvalues, y_true):
-        samples = len(dvalues)
+    def backward(self, doutput=1):
+        y_true = self.inputs[1]
+        y_pred = self.activation.output
         if len(y_true.shape) == 2:
             y_true = np.argmax(y_true, axis=1)
+        samples = len(y_true)
 
-        self.dinputs = dvalues.copy()
-        self.dinputs[range(samples), y_true] -= 1
-        self.dinputs = self.dinputs / samples
+        dinput = y_pred.copy()
+        dinput[range(samples), y_true] -= 1
+        dinput = doutput * dinput / samples
+        self.dinputs = [dinput]
+
+    def check_gradient(self):
+        to_be_check_fun = [[lambda: self.inputs[0], lambda: self.dinputs[0]]]
+        return super().check_gradient(to_be_check_fun=to_be_check_fun)
 
 
 class Optimizer_SGD:
