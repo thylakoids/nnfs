@@ -1,9 +1,6 @@
 import unittest
 import numpy as np
-# import nnfs
 from nnfs.datasets import spiral_data
-import matplotlib.pyplot as plt
-from thylakoids.time_code import code_timer
 
 from nn.nn import (Layer_Dense, Activation_Softmax, Activation_Sigmoid,
                    Activation_ReLU, Loss_CategoricalCrossentropy,
@@ -11,7 +8,6 @@ from nn.nn import (Layer_Dense, Activation_Softmax, Activation_Sigmoid,
                    Optimizer_SGD)
 
 np.random.seed(0)
-# nnfs.init()
 
 
 class Testnn(unittest.TestCase):
@@ -53,7 +49,7 @@ class Testnn(unittest.TestCase):
         loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
 
         # create optimizer
-        optimizer = Optimizer_SGD()
+        optimizer = Optimizer_SGD(learning_rate=4, decay=1e-3)
 
         # Train in loop
         for epoch in range(10001):
@@ -71,13 +67,15 @@ class Testnn(unittest.TestCase):
             accuracy = np.mean(predictions == self.y)
 
             if not epoch % 100:
-                print(f'epoch: {epoch}, acc: {accuracy:.3f}, loss: {loss:.3f}')
+                print(
+                    f'epoch: {epoch}, acc: {accuracy:.3f}, loss: {loss:.3f}, learning_rate: {optimizer.current_learning_rate}'
+                )
 
             # perform backward pass
             loss_activation.backward()
-            dense2.backward(loss_activation.parameters['input'].dvalue)
-            activation1.backward(dense2.parameters['input'].dvalue)
-            dense1.backward(activation1.parameters['input'].dvalue)
+            dense2.backward(loss_activation.get_dx('input'))
+            activation1.backward(dense2.get_dx('input'))
+            dense1.backward(activation1.get_dx('input'))
 
             # update parameters
             optimizer.update_params([dense1, dense2])

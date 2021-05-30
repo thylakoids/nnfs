@@ -1,14 +1,17 @@
 Neural Network From Scratch in Python
 =====================================
+Implement neural network from scratch in python.
 
-A Simple Neural Net
--------------------
+Diagram of A Simple Neural Net
+-----------------------------
 
 ``` mermaid
 graph LR
+X[sample X] --> x1
+X --> x2
 x1((x1))--*w11-->b1((+b1))
 x1--*w12-->b2((+b2))
-x2((x1))--*w21-->b1
+x2((x2))--*w21-->b1
 x2--*w22-->b2
 
 b1--Relu-->h1((h1))
@@ -44,11 +47,11 @@ The abstract class `Layer` looks something like this:
 ``` python
 class Layer:
     def __init__(self):
-        self.inputs = None
+        self.input = None
         self.output = None
 
-    def forward(self, *inputs):
-        # self.inputs = inputs
+    def forward(self, input):
+        # self.input = input
         # ...
         # return self.output
         raise NotImplementedError
@@ -59,3 +62,28 @@ class Layer:
     def check_gradient(self, to_be_check):
         raise NotImplementedError
 ```
+
+- [x] Dense_Layer
+- [x] Activation_Relu
+- [x] Activation_Sigmoid
+- [x] Activation_Softmax
+- [x] Loss_CategoricalCrossentropy
+- [x] Activation_Softmax_Loss_CategoricalCrossentropy
+
+Training a Neural Network
+-------------------------
+### Batch gradient decent
+$$ w = w -  l*\frac{\partial{loss}}{\partial{w}} $$
+``` python
+weights += -self.current_learning_rate * dweights
+biases += -self.current_learning_rate * dbiases
+```
+
+These elements affect the training process a lot:
+1. **Learing rate**
+2. How you choose to **initialize** the parameters
+
+Referrences
+-----------
+1. [Neural Networks from Scratch in **X**](https://github.com/Sentdex/NNfSiX)
+2. [tinynn](https://github.com/borgwang/tinynn)
