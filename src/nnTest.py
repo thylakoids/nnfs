@@ -19,7 +19,7 @@ class Testnn(unittest.TestCase):
     X, y = spiral_data(samples=100, classes=3)
     plot = False
 
-    def test_layer_checker(self):
+    def test_layer_gradient_checker(self):
         # define
         dense1 = Layer_Dense(2, 9)
         activation1 = Activation_ReLU()
@@ -33,8 +33,8 @@ class Testnn(unittest.TestCase):
         activation1.forward(dense1.output)
         activation2.forward(dense1.output)
         activation3.forward(dense1.output)
-        loss.forward([activation3.output, self.y])
-        softmax_loss.forward([dense1.output, self.y])
+        loss.forward(activation3.output, self.y)
+        softmax_loss.forward(dense1.output, self.y)
 
         # check
         dense1.check_gradient()

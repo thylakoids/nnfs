@@ -1,38 +1,89 @@
 import numpy as np
 
 
+class Parameters:
+    """
+    Class to represent inputs and parameters for Layer
+    """
+    def __init__(self, name, value=None, dvalue=None):
+        self.name = name
+        self.value = value
+        self.dvalue = dvalue
+
+
 class Layer:
+    """
+    1. parameters (input + parameters) is stored in self.parameters
+    2. able to call self.forward without argument which make it easy to check gradient
+    """
     def __init__(self):
-        # there might be multiple input, consider using a list to represent
-        # inputs
-        self.inputs = None
+        # self.inputs = {}
+        self.parameters = {}
         self.output = None
 
-        self.dinputs = None
+    def _set_parameter(self, name, value=None, dvalue=None):
+        parameter = self.parameters.get(name)
+        if parameter is None:
+            self.parameters[name] = Parameters(name, value, dvalue)
+            return
+        if value is not None:
+            self.parameters[name].value = value
+        if dvalue is not None:
+            self.parameters[name].dvalue = dvalue
 
-    def forward(self, *inputs):
-        # self.inputs = inputs
+    def _get_parameter(self, name):
+        parameter = self.parameters.get(name)
+        return parameter
+
+    def _get_parameter_prop(self, name, derivative=False):
+        """
+        get parameter value/dvalue by name
+        """
+        parameter = self.parameters.get(name)
+        if parameter is None:
+            return None
+        if derivative:
+            return parameter.dvalue
+        return parameter.value
+
+    def get_x(self, name):
+        return self._get_parameter_prop(name, derivative=False)
+
+    def get_dx(self, name):
+        return self._get_parameter_prop(name, derivative=True)
+
+    def set_x(self, name, value):
+        self._set_parameter(name, value=value)
+
+    def set_dx(self, name, dvalue):
+        self._set_parameter(name, dvalue=dvalue)
+
+    def forward(self, input=None):
+        # self.set_x('input', input)
         # ...
         # return self.output
         raise NotImplementedError
 
-    def backward(self, doutput=1):
+    def backward(self, doutput):
         raise NotImplementedError
 
-    def _check_gradient(self, to_be_check_fun, doutput, lossfun):
+    def _check_gradient(self, doutput, lossfun):
         delta = 1e-7
         tollerance = 1e-4
         self.backward(doutput)
-
         loss = lossfun(self.output)
-        to_be_check = [(x_fun(), dx_fun())
-                       for x_fun, dx_fun in to_be_check_fun]
-        for x, dx in to_be_check:
+
+        for _, parameter in self.parameters.items():
+            dx = parameter.dvalue
+            if dx is None:
+                continue
+            x = parameter.value
+            # TODO: more smart way to traverse a muti-dimentional array
             x_shape = x.shape
             for i in range(x_shape[0]):
                 for j in range(x_shape[1]):
                     x[i][j] += delta
-                    self.forward(self.inputs)
+                    self.forward()
                     loss_delta = lossfun(self.output) - loss
                     dx_ij_numerical = loss_delta / delta
 
@@ -50,26 +101,18 @@ class Layer:
                     # restore parameters and inputs
                     x[i][j] -= delta
         # restore output
-        self.forward(self.inputs)
+        self.forward()
 
-    def check_gradient(self, to_be_check_fun=None):
+    def check_gradient(self):
         """check_gradient
         Assume the next layer is: `f(x) = x` then `d(x) = 1` or `f(x) = x^2`
         then `d(x) = 2*x`.
-        example:
-        to_be_check = [[lambda: self.weights, lambda: self.dweights],
-                       [lambda: self.biases, lambda: self.dbiases],
-                       [lambda: self.inputs, lambda: self.dinputs]]
-        super().check_gradient(to_be_check_fun)
         """
-        to_be_check_fun = to_be_check_fun or [[
-            lambda: self.inputs, lambda: self.dinputs
-        ]]
         doutput_lossfun = [(np.ones_like(self.output), lambda x: np.sum(x)),
                            (2 * self.output, lambda x: np.sum(x * x)),
                            (3 * self.output**2, lambda x: np.sum(x**3))]
         for doutput, lossfun in doutput_lossfun:
-            self._check_gradient(to_be_check_fun, doutput, lossfun)
+            self._check_gradient(doutput, lossfun)
 
 
 class Layer_Dense(Layer):
@@ -77,63 +120,116 @@ class Layer_Dense(Layer):
         super().__init__()
 
         # TODO: how to initial parameters
-        self.weights = 0.10 * np.random.randn(n_inputs, n_neurons)
-        self.biases = 0.10 * np.random.randn(1, n_neurons)
+        weights = 0.10 * np.random.randn(n_inputs, n_neurons)
+        biases = 0.10 * np.random.randn(1, n_neurons)
 
-        self.dweights = None
-        self.dbiases = None
+        self.set_x('weights', weights)
+        self.set_x('biases', biases)
 
-    def forward(self, inputs: np.ndarray) -> np.ndarray:
-        self.inputs = inputs
-        self.output = np.dot(inputs, self.weights) + self.biases
+    @property
+    def weights(self):
+        return self.get_x('weights')
+
+    @weights.setter
+    def weights(self, value):
+        self.set_x('weights', value)
+
+    def forward(self, input=None) -> np.ndarray:
+        if input is not None:
+            self.set_x('input', input)
+
+        weights = self.get_x('weights')
+        biases = self.get_x('biases')
+        input = self.get_x('input')
+        if input is None:
+            raise ValueError("no input provided")
+
+        # -------------------------
+        self.output = np.dot(input, weights) + biases
+        # -------------------------
+
         return self.output
 
     def backward(self, doutput):
+        input = self.get_x('input')
+
+        # -------------------------
         # Gradients on parameters
-        self.dweights = np.dot(self.inputs.T, doutput)
-        self.dbiases = np.sum(doutput, axis=0, keepdims=True)
-
+        dweights = np.dot(input.T, doutput)
+        dbiases = np.sum(doutput, axis=0, keepdims=True)
         # Gradient on input
-        self.dinputs = np.dot(doutput, self.weights.T)
+        dinput = np.dot(doutput, self.weights.T)
+        # -------------------------
 
-    def check_gradient(self):
-        to_be_check = [[lambda: self.weights, lambda: self.dweights],
-                       [lambda: self.biases, lambda: self.dbiases],
-                       [lambda: self.inputs, lambda: self.dinputs]]
-        super().check_gradient(to_be_check)
+        self.set_dx('weights', dweights)
+        self.set_dx('biases', dbiases)
+        self.set_dx('input', dinput)
 
 
 class Activation_ReLU(Layer):
-    def forward(self, inputs: np.ndarray) -> np.ndarray:
-        self.inputs = inputs
-        self.output = np.maximum(0, inputs)
+    def forward(self, input=None) -> np.ndarray:
+        if input is not None:
+            self.set_x('input', input)
+        input = self.get_x('input')
+        if input is None:
+            raise ValueError("no input provided")
+
+        # -------------------------
+        self.output = np.maximum(0, input)
+        # -------------------------
+
         return self.output
 
     def backward(self, doutput):
-        self.dinputs = doutput.copy()
-        self.dinputs[self.inputs < 0] = 0
+        input = self.get_x('input')
+
+        # ---------------------
+        dinput = doutput.copy()
+        dinput[input < 0] = 0
+        # ---------------------
+
+        self.set_dx('input', dinput)
 
 
 class Activation_Sigmoid(Layer):
-    def forward(self, inputs: np.ndarray) -> np.ndarray:
-        self.inputs = inputs
-        self.output = 1 / (1 + np.exp(-1 * inputs))
+    def forward(self, input=None) -> np.ndarray:
+        if input is not None:
+            self.set_x('input', input)
+        input = self.get_x('input')
+        if input is None:
+            raise ValueError("no input provided")
+
+        # -------------------------
+        self.output = 1 / (1 + np.exp(-1 * input))
+        # -------------------------
+
         return self.output
 
     def backward(self, doutput):
-        self.dinputs = doutput * self.output * (1 - self.output)
+        # -------------------------
+        dinput = doutput * self.output * (1 - self.output)
+        # -------------------------
+
+        self.set_dx('input', dinput)
 
 
 class Activation_Softmax(Layer):
-    def forward(self, inputs: np.ndarray) -> np.ndarray:
-        self.inputs = inputs
-        exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
+    def forward(self, input=None) -> np.ndarray:
+        if input is not None:
+            self.set_x('input', input)
+        input = self.get_x('input')
+        if input is None:
+            raise ValueError("no input provided")
+        # -------------------------
+        exp_values = np.exp(input - np.max(input, axis=1, keepdims=True))
         self.output = exp_values / np.sum(exp_values, axis=1, keepdims=True)
+        # -------------------------
         return self.output
 
     def backward(self, doutput):
+        # ---------------------
         # Create uninitialized array
-        self.dinputs = np.empty_like(doutput)
+        dinput = np.empty_like(doutput)
 
         # Enumerate outputs and gradients
         for index, (single_output,
@@ -145,16 +241,24 @@ class Activation_Softmax(Layer):
                 single_output, single_output.T)
             # Calculate sample-wise gradient
             # and add it to the array of sample gradients
-            self.dinputs[index] = np.dot(jacobian_matrix, single_dvalues)
+            dinput[index] = np.dot(jacobian_matrix, single_dvalues)
+        # ---------------------
+
+        self.set_dx('input', dinput)
 
 
 class Loss_CategoricalCrossentropy(Layer):
-    def __init__(self):
-        super().__init__()
+    def forward(self, y_pred=None, y_true=None):
+        if y_pred is not None:
+            self.set_x('y_pred', y_pred)
+        if y_true is not None:
+            self.set_x('y_true', y_true)
+        y_pred = self.get_x('y_pred')
+        y_true = self.get_x('y_true')
+        if y_pred is None or y_true is None:
+            raise ValueError("no y_pred and y_true provided")
 
-    def forward(self, inputs):
-        y_pred, y_true = inputs
-        self.inputs = inputs
+        # -----------------------------
         samples = len(y_pred)
 
         y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
@@ -169,11 +273,15 @@ class Loss_CategoricalCrossentropy(Layer):
 
         negative_log_likelihoods = -np.log(correct_confidences)
         self.output = np.mean(negative_log_likelihoods)
+        # -----------------------------
+
         return self.output
 
     def backward(self, doutput=1):
-        y_pred, y_true = self.inputs
+        y_pred = self.get_x('y_pred')
+        y_true = self.get_x('y_true')
 
+        # -----------------------
         if len(y_true.shape) == 1:
             labels = len(y_pred[0])
             y_true = np.eye(labels)[y_true]
@@ -182,11 +290,9 @@ class Loss_CategoricalCrossentropy(Layer):
         # Normalize gradient
         # so that, we don't need to normalize gradient when perform optimization
         dy_pred = doutput * dy_pred / len(y_pred)
-        self.dinputs = [dy_pred]
+        # ------------------------
 
-    def check_gradient(self):
-        to_be_check_fun = [[lambda: self.inputs[0], lambda: self.dinputs[0]]]
-        return super().check_gradient(to_be_check_fun=to_be_check_fun)
+        self.set_dx('y_pred', dy_pred)
 
 
 class Activation_Softmax_Loss_CategoricalCrossentropy(Layer):
@@ -195,16 +301,27 @@ class Activation_Softmax_Loss_CategoricalCrossentropy(Layer):
         self.activation = Activation_Softmax()
         self.loss = Loss_CategoricalCrossentropy()
 
-    def forward(self, inputs):
-        self.inputs = inputs
-        input, y_true = inputs
+    def forward(self, input=None, y_true=None):
+        if input is not None:
+            self.set_x('input', input)
+        if y_true is not None:
+            self.set_x('y_true', y_true)
+
+        input = self.get_x('input')
+        y_true = self.get_x('y_true')
+
+        # ---------------------
         self.activation.forward(input)
-        self.output = self.loss.forward([self.activation.output, y_true])
+        self.output = self.loss.forward(self.activation.output, y_true)
+        # ---------------------
+
         return self.output
 
     def backward(self, doutput=1):
-        y_true = self.inputs[1]
+        y_true = self.get_x('y_true')
         y_pred = self.activation.output
+
+        # ----------------------------
         if len(y_true.shape) == 2:
             y_true = np.argmax(y_true, axis=1)
         samples = len(y_true)
@@ -212,11 +329,9 @@ class Activation_Softmax_Loss_CategoricalCrossentropy(Layer):
         dinput = y_pred.copy()
         dinput[range(samples), y_true] -= 1
         dinput = doutput * dinput / samples
-        self.dinputs = [dinput]
+        # ----------------------------
 
-    def check_gradient(self):
-        to_be_check_fun = [[lambda: self.inputs[0], lambda: self.dinputs[0]]]
-        return super().check_gradient(to_be_check_fun=to_be_check_fun)
+        self.set_dx('input', dinput)
 
 
 class Optimizer_SGD:
