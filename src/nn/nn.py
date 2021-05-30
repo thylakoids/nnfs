@@ -152,13 +152,14 @@ class Layer_Dense(Layer):
 
     def backward(self, doutput):
         input = self.get_x('input')
+        weights = self.get_x('weights')
 
         # -------------------------
         # Gradients on parameters
         dweights = np.dot(input.T, doutput)
         dbiases = np.sum(doutput, axis=0, keepdims=True)
         # Gradient on input
-        dinput = np.dot(doutput, self.weights.T)
+        dinput = np.dot(doutput, weights.T)
         # -------------------------
 
         self.set_dx('weights', dweights)
@@ -341,9 +342,21 @@ class Optimizer_SGD:
         self.decay = decay
         self.iterations = 0
 
-    def update_params(self, layer):
-        layer.weights += -self.current_learning_rate * layer.dweights
-        layer.biases += -self.current_learning_rate * layer.dbiases
+    def _update_params_one_layer(self, layer):
+        weights = layer.get_x('weights')
+        biases = layer.get_x('biases')
+
+        weights += -self.current_learning_rate * layer.get_dx('weights')
+        biases += -self.current_learning_rate * layer.get_dx('biases')
+
+        layer.set_x('weights', weights)
+        layer.set_x('biases', biases)
+
+    def update_params(self, layers):
+        self.pre_update_params()
+        for layer in layers:
+            self._update_params_one_layer(layer)
+        self.post_update_params()
 
     def pre_update_params(self):
         if self.decay:
