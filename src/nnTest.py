@@ -49,7 +49,7 @@ class Testnn(unittest.TestCase):
         loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
 
         # create optimizer
-        optimizer = Optimizer_SGD(learning_rate=4, decay=1e-3)
+        optimizer = Optimizer_SGD(learning_rate=1, decay=1e-3, momentum=0.9)
 
         # Train in loop
         for epoch in range(10001):

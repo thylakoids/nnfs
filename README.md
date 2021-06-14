@@ -70,7 +70,7 @@ class Layer:
 - [x] Loss_CategoricalCrossentropy
 - [x] Activation_Softmax_Loss_CategoricalCrossentropy
 
-Training a Neural Network
+[Training a Neural Network](training-a-neural-network.md)
 -------------------------
 ### Batch gradient decent
 $$ w = w -  l*\frac{\partial{loss}}{\partial{w}} $$

@@ -5,10 +5,11 @@ class Parameters:
     """
     Class to represent inputs and parameters for Layer
     """
-    def __init__(self, name, value=None, dvalue=None):
+    def __init__(self, name, value=None, dvalue=None, momentum=None):
         self.name = name
         self.value = value
         self.dvalue = dvalue
+        self.momentum = momentum
 
 
 class Layer:
@@ -21,42 +22,48 @@ class Layer:
         self.parameters = {}
         self.output = None
 
-    def _set_parameter(self, name, value=None, dvalue=None):
+    def _set_parameter(self, name, value=None, dvalue=None, momentum=None):
         parameter = self.parameters.get(name)
         if parameter is None:
-            self.parameters[name] = Parameters(name, value, dvalue)
+            self.parameters[name] = Parameters(name, value, dvalue, momentum)
             return
         if value is not None:
             self.parameters[name].value = value
         if dvalue is not None:
             self.parameters[name].dvalue = dvalue
+        if momentum is not None:
+            self.parameters[name].momentum = momentum
 
     def _get_parameter(self, name):
         parameter = self.parameters.get(name)
         return parameter
 
-    def _get_parameter_prop(self, name, derivative=False):
+    def _get_parameter_prop(self, name, prop):
         """
-        get parameter value/dvalue by name
+        get parameter value/dvalue/momentum by name
         """
         parameter = self.parameters.get(name)
-        if parameter is None:
-            return None
-        if derivative:
-            return parameter.dvalue
-        return parameter.value
+        if hasattr(parameter, prop):
+            return getattr(parameter, prop)
+        return None
 
     def get_x(self, name):
-        return self._get_parameter_prop(name, derivative=False)
+        return self._get_parameter_prop(name, prop='value')
 
     def get_dx(self, name):
-        return self._get_parameter_prop(name, derivative=True)
+        return self._get_parameter_prop(name, prop='dvalue')
+
+    def get_momentum(self, name):
+        return self._get_parameter_prop(name, prop='momentum')
 
     def set_x(self, name, value):
         self._set_parameter(name, value=value)
 
     def set_dx(self, name, dvalue):
         self._set_parameter(name, dvalue=dvalue)
+
+    def set_momentum(self, name, momentum):
+        self._set_parameter(name, momentum=momentum)
 
     def forward(self, input=None):
         # self.set_x('input', input)
@@ -120,8 +127,8 @@ class Layer_Dense(Layer):
         super().__init__()
 
         # TODO: how to initial parameters
-        weights = 0.10 * np.random.randn(n_inputs, n_neurons)
-        biases = 0.10 * np.random.randn(1, n_neurons)
+        weights = 0.01 * np.random.randn(n_inputs, n_neurons)
+        biases = 0 * np.random.randn(1, n_neurons)
 
         self.set_x('weights', weights)
         self.set_x('biases', biases)
@@ -336,9 +343,10 @@ class Activation_Softmax_Loss_CategoricalCrossentropy(Layer):
 
 
 class Optimizer_SGD:
-    def __init__(self, learning_rate=1.0, decay=0.):
+    def __init__(self, learning_rate=1.0, decay=0., momentum=0.):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
+        self.momentum = momentum
         self.decay = decay
         self.iterations = 0
 
@@ -346,11 +354,32 @@ class Optimizer_SGD:
         weights = layer.get_x('weights')
         biases = layer.get_x('biases')
 
-        weights += -self.current_learning_rate * layer.get_dx('weights')
-        biases += -self.current_learning_rate * layer.get_dx('biases')
+        dweights = layer.get_dx('weights')
+        dbiases = layer.get_dx('biases')
 
-        layer.set_x('weights', weights)
-        layer.set_x('biases', biases)
+        current_learning_rate = self.current_learning_rate
+        momentum = self.momentum
+
+        if momentum:
+            weight_momentums = layer.get_momentum('weights')
+            bias_momentums = layer.get_momentum('biases')
+            if weight_momentums is None:
+                layer.set_momentum('weights', np.zeros_like(weights))
+                weight_momentums = layer.get_momentum('weights')
+            if bias_momentums is None:
+                layer.set_momentum('biases', np.zeros_like(biases))
+                bias_momentums = layer.get_momentum('biases')
+
+            weights_update = momentum * weight_momentums - current_learning_rate * dweights
+            biases_update = momentum * bias_momentums - current_learning_rate * dbiases
+            layer.set_momentum('weights', weights_update)
+            layer.set_momentum('biases', biases_update)
+        else:
+            weights_update = -current_learning_rate * dweights
+            biases_update = -current_learning_rate * dbiases
+
+        layer.set_x('weights', weights + weights_update)
+        layer.set_x('biases', biases + biases_update)
 
     def update_params(self, layers):
         self.pre_update_params()
