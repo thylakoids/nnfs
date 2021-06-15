@@ -5,11 +5,17 @@ class Parameters:
     """
     Class to represent inputs and parameters for Layer
     """
-    def __init__(self, name, value=None, dvalue=None, momentum=None):
+    def __init__(self,
+                 name,
+                 value=None,
+                 dvalue=None,
+                 momentum=None,
+                 cache=None):
         self.name = name
         self.value = value
         self.dvalue = dvalue
         self.momentum = momentum
+        self.cache = cache
 
 
 class Layer:
@@ -22,10 +28,16 @@ class Layer:
         self.parameters = {}
         self.output = None
 
-    def _set_parameter(self, name, value=None, dvalue=None, momentum=None):
+    def _set_parameter(self,
+                       name,
+                       value=None,
+                       dvalue=None,
+                       momentum=None,
+                       cache=None):
         parameter = self.parameters.get(name)
         if parameter is None:
-            self.parameters[name] = Parameters(name, value, dvalue, momentum)
+            self.parameters[name] = Parameters(name, value, dvalue, momentum,
+                                               cache)
             return
         if value is not None:
             self.parameters[name].value = value
@@ -33,6 +45,8 @@ class Layer:
             self.parameters[name].dvalue = dvalue
         if momentum is not None:
             self.parameters[name].momentum = momentum
+        if cache is not None:
+            self.parameters[name].cache = cache
 
     def _get_parameter(self, name):
         parameter = self.parameters.get(name)
@@ -56,6 +70,9 @@ class Layer:
     def get_momentum(self, name):
         return self._get_parameter_prop(name, prop='momentum')
 
+    def get_cache(self, name):
+        return self._get_parameter_prop(name, prop='cache')
+
     def set_x(self, name, value):
         self._set_parameter(name, value=value)
 
@@ -64,6 +81,9 @@ class Layer:
 
     def set_momentum(self, name, momentum):
         self._set_parameter(name, momentum=momentum)
+
+    def set_cache(self, name, cache):
+        self._set_parameter(name, cache=cache)
 
     def forward(self, input=None):
         # self.set_x('input', input)
@@ -128,7 +148,7 @@ class Layer_Dense(Layer):
 
         # TODO: how to initial parameters
         weights = 0.01 * np.random.randn(n_inputs, n_neurons)
-        biases = 0 * np.random.randn(1, n_neurons)
+        biases = 0.0 * np.random.randn(1, n_neurons)
 
         self.set_x('weights', weights)
         self.set_x('biases', biases)
@@ -342,44 +362,15 @@ class Activation_Softmax_Loss_CategoricalCrossentropy(Layer):
         self.set_dx('input', dinput)
 
 
-class Optimizer_SGD:
-    def __init__(self, learning_rate=1.0, decay=0., momentum=0.):
+class Optimizer:
+    def __init__(self, learning_rate=1.0, decay=0.):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
-        self.momentum = momentum
         self.decay = decay
         self.iterations = 0
 
     def _update_params_one_layer(self, layer):
-        weights = layer.get_x('weights')
-        biases = layer.get_x('biases')
-
-        dweights = layer.get_dx('weights')
-        dbiases = layer.get_dx('biases')
-
-        current_learning_rate = self.current_learning_rate
-        momentum = self.momentum
-
-        if momentum:
-            weight_momentums = layer.get_momentum('weights')
-            bias_momentums = layer.get_momentum('biases')
-            if weight_momentums is None:
-                layer.set_momentum('weights', np.zeros_like(weights))
-                weight_momentums = layer.get_momentum('weights')
-            if bias_momentums is None:
-                layer.set_momentum('biases', np.zeros_like(biases))
-                bias_momentums = layer.get_momentum('biases')
-
-            weights_update = momentum * weight_momentums - current_learning_rate * dweights
-            biases_update = momentum * bias_momentums - current_learning_rate * dbiases
-            layer.set_momentum('weights', weights_update)
-            layer.set_momentum('biases', biases_update)
-        else:
-            weights_update = -current_learning_rate * dweights
-            biases_update = -current_learning_rate * dbiases
-
-        layer.set_x('weights', weights + weights_update)
-        layer.set_x('biases', biases + biases_update)
+        raise NotImplementedError
 
     def update_params(self, layers):
         self.pre_update_params()
@@ -394,3 +385,213 @@ class Optimizer_SGD:
 
     def post_update_params(self):
         self.iterations += 1
+
+
+class Optimizer_SGD(Optimizer):
+    def __init__(self,
+                 learning_rate=1.0,
+                 decay=0.,
+                 momentum=0.,
+                 nesterov=False):
+        super().__init__(learning_rate=learning_rate, decay=decay)
+        self.momentum = momentum
+        self.nesterov = nesterov
+
+    def _update_params_one_layer(self, layer):
+        weights = layer.get_x('weights')
+        biases = layer.get_x('biases')
+
+        dweights = layer.get_dx('weights')
+        dbiases = layer.get_dx('biases')
+
+        current_learning_rate = self.current_learning_rate
+        momentum = self.momentum
+        nesterov = self.nesterov
+
+        if momentum and nesterov:
+            weight_momentums = layer.get_momentum('weights')
+            bias_momentums = layer.get_momentum('biases')
+            if weight_momentums is None:
+                weight_momentums = np.zeros_like(weights)
+            if bias_momentums is None:
+                bias_momentums = np.zeros_like(biases)
+
+            weight_momentums_new = momentum * weight_momentums - current_learning_rate * dweights
+            bias_momentums_new = momentum * bias_momentums - current_learning_rate * dbiases
+
+            weights_update = (
+                1 +
+                momentum) * weight_momentums_new - momentum * weight_momentums
+            biases_update = (
+                1 + momentum) * bias_momentums_new - momentum * bias_momentums
+
+            layer.set_momentum('weights', weight_momentums_new)
+            layer.set_momentum('biases', bias_momentums_new)
+
+        elif momentum:
+            weight_momentums = layer.get_momentum('weights')
+            bias_momentums = layer.get_momentum('biases')
+            if weight_momentums is None:
+                weight_momentums = np.zeros_like(weights)
+            if bias_momentums is None:
+                bias_momentums = np.zeros_like(biases)
+
+            # integrate velocity
+            weights_update = momentum * weight_momentums - current_learning_rate * dweights
+            biases_update = momentum * bias_momentums - current_learning_rate * dbiases
+            layer.set_momentum('weights', weights_update)
+            layer.set_momentum('biases', biases_update)
+        else:
+            weights_update = -current_learning_rate * dweights
+            biases_update = -current_learning_rate * dbiases
+
+        # integrate position
+        layer.set_x('weights', weights + weights_update)
+        layer.set_x('biases', biases + biases_update)
+
+
+class Optimizer_Adagrad(Optimizer):
+    def __init__(self, learning_rate=1.0, decay=0., epsilon=1e-7):
+        super().__init__(learning_rate=learning_rate, decay=decay)
+        self.epsilon = epsilon
+
+    def _update_params_one_layer(self, layer):
+        weights = layer.get_x('weights')
+        biases = layer.get_x('biases')
+
+        dweights = layer.get_dx('weights')
+        dbiases = layer.get_dx('biases')
+
+        current_learning_rate = self.current_learning_rate
+        epsilon = self.epsilon
+
+        weight_caches = layer.get_cache('weights')
+        bias_caches = layer.get_cache('biases')
+        if weight_caches is None:
+            weight_caches = np.zeros_like(weights)
+        if bias_caches is None:
+            bias_caches = np.zeros_like(biases)
+
+        # ---------------------------------------------
+        weight_caches += dweights**2
+        bias_caches += dbiases**2
+        weights += -current_learning_rate * dweights / (
+            np.sqrt(weight_caches) + epsilon)
+        biases += -current_learning_rate * dbiases / (np.sqrt(bias_caches) +
+                                                      epsilon)
+        # ---------------------------------------------
+
+        layer.set_cache('weights', weight_caches)
+        layer.set_cache('biases', bias_caches)
+        layer.set_x('weights', weights)
+        layer.set_x('biases', biases)
+
+
+class Optimizer_RMSprop(Optimizer):
+    def __init__(self, learning_rate=1.0, decay=0., epsilon=1e-7, rho=0.9):
+        super().__init__(learning_rate=learning_rate, decay=decay)
+        self.epsilon = epsilon
+        self.rho = rho
+
+    def _update_params_one_layer(self, layer):
+        weights = layer.get_x('weights')
+        biases = layer.get_x('biases')
+
+        dweights = layer.get_dx('weights')
+        dbiases = layer.get_dx('biases')
+
+        current_learning_rate = self.current_learning_rate
+        epsilon = self.epsilon
+        rho = self.rho
+
+        weight_caches = layer.get_cache('weights')
+        bias_caches = layer.get_cache('biases')
+        if weight_caches is None:
+            weight_caches = np.zeros_like(weights)
+        if bias_caches is None:
+            bias_caches = np.zeros_like(biases)
+
+        # ---------------------------------------------
+        weight_caches = rho * weight_caches + (1 - rho) * dweights**2
+        bias_caches = rho * bias_caches + (1 - rho) * dbiases**2
+        weights += -current_learning_rate * dweights / (
+            np.sqrt(weight_caches) + epsilon)
+        biases += -current_learning_rate * dbiases / (np.sqrt(bias_caches) +
+                                                      epsilon)
+        # ---------------------------------------------
+
+        layer.set_cache('weights', weight_caches)
+        layer.set_cache('biases', bias_caches)
+        layer.set_x('weights', weights)
+        layer.set_x('biases', biases)
+
+
+class Optimizer_Adam(Optimizer):
+    def __init__(self,
+                 learning_rate=0.001,
+                 decay=0.,
+                 epsilon=1e-7,
+                 beta_1=0.9,
+                 beta_2=0.999):
+        super().__init__(learning_rate=learning_rate, decay=decay)
+        self.epsilon = epsilon
+        self.beta_1 = beta_1
+        self.beta_2 = beta_2
+
+    def _update_params_one_layer(self, layer):
+        weights = layer.get_x('weights')
+        biases = layer.get_x('biases')
+
+        dweights = layer.get_dx('weights')
+        dbiases = layer.get_dx('biases')
+
+        current_learning_rate = self.current_learning_rate
+        iterations = self.iterations
+        epsilon = self.epsilon
+        beta_1 = self.beta_1
+        beta_2 = self.beta_2
+
+        weight_caches = layer.get_cache('weights')
+        bias_caches = layer.get_cache('biases')
+        weight_momentums = layer.get_momentum('weights')
+        bias_momentums = layer.get_momentum('biases')
+        if weight_caches is None:
+            weight_caches = np.zeros_like(weights)
+        if bias_caches is None:
+            bias_caches = np.zeros_like(biases)
+        if weight_momentums is None:
+            weight_momentums = np.zeros_like(weights)
+        if bias_momentums is None:
+            bias_momentums = np.zeros_like(biases)
+
+        # ---------------------------------------------
+        # update momentums
+        weight_momentums = beta_1 * weight_momentums + (1 - beta_1) * dweights
+        bias_momentums = beta_1 * bias_momentums + (1 - beta_1) * dbiases
+
+        # correct momentums
+        coef = 1 / (1 - beta_1**(iterations + 1))
+        weight_momentums_corrected = weight_momentums * coef
+        bias_momentums_corrected = bias_momentums * coef
+
+        # update caches
+        weight_caches = beta_2 * weight_caches + (1 - beta_2) * dweights**2
+        bias_caches = beta_2 * bias_caches + (1 - beta_2) * dbiases**2
+
+        # correct caches
+        coef = 1 / (1 - beta_2**(iterations + 1))
+        weight_caches_corrected = weight_caches * coef
+        bias_caches_corrected = bias_caches * coef
+
+        weights += -current_learning_rate * weight_momentums_corrected / (
+            np.sqrt(weight_caches_corrected) + epsilon)
+        biases += -current_learning_rate * bias_momentums_corrected / (
+            np.sqrt(bias_caches_corrected) + epsilon)
+        # ---------------------------------------------
+
+        layer.set_momentum('weights', weight_momentums)
+        layer.set_momentum('biases', bias_momentums)
+        layer.set_cache('weights', weight_caches)
+        layer.set_cache('biases', bias_caches)
+        layer.set_x('weights', weights)
+        layer.set_x('biases', biases)
