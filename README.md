@@ -70,6 +70,45 @@ class Layer:
 - [x] Loss_CategoricalCrossentropy
 - [x] Activation_Softmax_Loss_CategoricalCrossentropy
 
+
+Numerical Differentiation
+-------------------------
+### One-sided Differencing
+$$
+f^\prime(x) \approx \frac{f(x+h) - f(x)}{h}
+$$
+
+$$
+f(x+h) = f(x) + hf^\prime(x) + \frac{h^2}{2}f^{\prime\prime}(\xi),  \xi \in (x, x+h)
+$$
+
+This formulae has an error on order of $O(h)$.
+
+### Centered Differencing
+
+$$
+f^\prime(x) \approx \frac{f(x+h) - f(x-h)}{2h}
+$$
+
+
+$$
+f(x+h) = f(x) + hf^\prime(x) + \frac{h^2}{2}f^{\prime\prime}(x) + \frac{h^3}{6}f^{\prime\prime\prime}(\xi_1),  \xi_1 \in (x, x+h)
+$$
+$$
+f(x-h) = f(x) - hf^\prime(x) + \frac{h^2}{2}f^{\prime\prime}(x) - \frac{h^3}{6}f^{\prime\prime\prime}(\xi_2),  \xi_2 \in (x-h, x)
+$$
+
+$$
+\begin{aligned}
+f^\prime(x) &= \frac{f(x+h) - f(x-h)}{2h} - \frac{h^2}{12}[f^{\prime\prime\prime}(\xi_1)+f^{\prime\prime\prime}(\xi_2)] \\
+&=\frac{f(x+h) - f(x-h)}{2h} - \frac{h^2}{6}f^{\prime\prime\prime}(\xi), \xi \in (x-h, x+h)
+
+\end{aligned}
+$$
+
+Hence, this formulae has an error on order of $O(h^2)$.
+
+
 [Training a Neural Network](training-a-neural-network.md)
 -------------------------
 ### Batch gradient decent
@@ -87,3 +126,4 @@ Referrences
 -----------
 1. [Neural Networks from Scratch in **X**](https://github.com/Sentdex/NNfSiX)
 2. [tinynn](https://github.com/borgwang/tinynn)
+3. [CS231n Convolutional Neural Networks for Visual Recognition](https://cs231n.github.io/neural-networks-3/#sgd)

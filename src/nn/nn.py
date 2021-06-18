@@ -98,7 +98,6 @@ class Layer:
         delta = 1e-7
         tollerance = 1e-4
         self.backward(doutput)
-        loss = lossfun(self.output)
 
         for _, parameter in self.parameters.items():
             dx = parameter.dvalue
@@ -109,9 +108,17 @@ class Layer:
             x_shape = x.shape
             for i in range(x_shape[0]):
                 for j in range(x_shape[1]):
-                    x[i][j] += delta
+                    # x - h
+                    x[i][j] -= delta
                     self.forward()
-                    loss_delta = lossfun(self.output) - loss
+                    loss_l = lossfun(self.output)
+
+                    # x + h
+                    x[i][j] += 2 * delta
+                    self.forward()
+                    loss_r = lossfun(self.output)
+
+                    loss_delta = 0.5 * (loss_r - loss_l)
                     dx_ij_numerical = loss_delta / delta
 
                     # diff =  a-b or (a-b)/a when abs(a) > 1
@@ -121,10 +128,15 @@ class Layer:
                             diff = diff / abs(dx_ij_numerical)
 
                     if diff > tollerance:
-                        print(doutput)
-                        print('i, j, dx_ij_numerical, dx[i][j], diff:', i, j,
-                              dx_ij_numerical, dx[i][j], diff)
-                        raise AssertionError
+                        # ReLU is non-differentiable at 0
+                        if self.__class__ == Activation_ReLU and abs(
+                                x[i][j]) < 2 * delta:
+                            pass
+                        else:
+                            print(doutput)
+                            print('i, j, dx_ij_numerical, dx[i][j], diff:', i,
+                                  j, dx_ij_numerical, dx[i][j], diff)
+                            raise AssertionError
                     # restore parameters and inputs
                     x[i][j] -= delta
         # restore output
