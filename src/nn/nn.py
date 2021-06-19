@@ -160,7 +160,7 @@ class Layer_Dense(Layer):
 
         # TODO: how to initial parameters
         weights = 0.01 * np.random.randn(n_inputs, n_neurons)
-        biases = 0.0 * np.random.randn(1, n_neurons)
+        biases = 0. * np.random.randn(1, n_neurons)
 
         self.set_x('weights', weights)
         self.set_x('biases', biases)
@@ -538,6 +538,59 @@ class Optimizer_RMSprop(Optimizer):
         layer.set_x('biases', biases)
 
 
+class Optimizer_Adadelta(Optimizer):
+    def __init__(self, epsilon=1e-3, rho=0.95):
+        super().__init__()
+        self.epsilon = epsilon
+        self.rho = rho
+
+    def _update_params_one_layer(self, layer):
+        weights = layer.get_x('weights')
+        biases = layer.get_x('biases')
+
+        dweights = layer.get_dx('weights')
+        dbiases = layer.get_dx('biases')
+
+        epsilon = self.epsilon
+        rho = self.rho
+
+        weight_caches = layer.get_cache('weights')
+        bias_caches = layer.get_cache('biases')
+        weight_delta_caches = layer.get_momentum('weights')
+        bias_delta_caches = layer.get_momentum('biases')
+        if weight_caches is None:
+            weight_caches = np.zeros_like(weights)
+        if bias_caches is None:
+            bias_caches = np.zeros_like(biases)
+        if weight_delta_caches is None:
+            weight_delta_caches = np.zeros_like(weights)
+        if bias_delta_caches is None:
+            bias_delta_caches = np.zeros_like(biases)
+
+        # ---------------------------------------------
+        weight_caches = rho * weight_caches + (1 - rho) * dweights**2
+        bias_caches = rho * bias_caches + (1 - rho) * dbiases**2
+
+        weight_delta = -dweights * (np.sqrt(weight_delta_caches) + epsilon) / (
+            np.sqrt(weight_caches) + epsilon)
+        bias_delta = -dbiases * (np.sqrt(bias_delta_caches) +
+                                 epsilon) / (np.sqrt(bias_caches) + epsilon)
+
+        weight_delta_caches = rho * weight_delta_caches + (
+            1 - rho) * weight_delta**2
+        bias_delta_caches = rho * bias_delta_caches + (1 - rho) * bias_delta**2
+
+        weights += weight_delta
+        biases += bias_delta
+        # ---------------------------------------------
+        layer.set_momentum('weights', weight_delta_caches)
+        layer.set_momentum('biases', bias_delta_caches)
+        layer.set_cache('weights', weight_caches)
+        layer.set_cache('biases', bias_caches)
+        layer.set_x('weights', weights)
+        layer.set_x('biases', biases)
+
+
 class Optimizer_Adam(Optimizer):
     def __init__(self,
                  learning_rate=0.001,
@@ -581,24 +634,16 @@ class Optimizer_Adam(Optimizer):
         weight_momentums = beta_1 * weight_momentums + (1 - beta_1) * dweights
         bias_momentums = beta_1 * bias_momentums + (1 - beta_1) * dbiases
 
-        # correct momentums
-        coef = 1 / (1 - beta_1**(iterations + 1))
-        weight_momentums_corrected = weight_momentums * coef
-        bias_momentums_corrected = bias_momentums * coef
-
         # update caches
         weight_caches = beta_2 * weight_caches + (1 - beta_2) * dweights**2
         bias_caches = beta_2 * bias_caches + (1 - beta_2) * dbiases**2
 
-        # correct caches
-        coef = 1 / (1 - beta_2**(iterations + 1))
-        weight_caches_corrected = weight_caches * coef
-        bias_caches_corrected = bias_caches * coef
-
-        weights += -current_learning_rate * weight_momentums_corrected / (
-            np.sqrt(weight_caches_corrected) + epsilon)
-        biases += -current_learning_rate * bias_momentums_corrected / (
-            np.sqrt(bias_caches_corrected) + epsilon)
+        coef = np.sqrt(1 - beta_2**(iterations + 1)) / (1 - beta_1**
+                                                        (iterations + 1))
+        weights += -coef * current_learning_rate * weight_momentums / (
+            np.sqrt(weight_caches) + epsilon)
+        biases += -coef * current_learning_rate * bias_momentums / (
+            np.sqrt(bias_caches) + epsilon)
         # ---------------------------------------------
 
         layer.set_momentum('weights', weight_momentums)

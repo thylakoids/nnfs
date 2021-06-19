@@ -5,8 +5,8 @@ from nnfs.datasets import spiral_data
 from nn.nn import (Layer_Dense, Activation_Softmax, Activation_Sigmoid,
                    Activation_ReLU, Loss_CategoricalCrossentropy,
                    Activation_Softmax_Loss_CategoricalCrossentropy,
-                   Optimizer_Adagrad, Optimizer_Adam, Optimizer_RMSprop,
-                   Optimizer_SGD)
+                   Optimizer_Adadelta, Optimizer_Adagrad, Optimizer_Adam,
+                   Optimizer_RMSprop, Optimizer_SGD)
 
 np.random.seed(0)
 
@@ -59,6 +59,7 @@ class Testnn(unittest.TestCase):
         # optimizer = Optimizer_RMSprop(learning_rate=0.02,
         #                               decay=1e-5,
         #                               rho=0.999)
+        # optimizer = Optimizer_Adadelta()
         optimizer = Optimizer_Adam(learning_rate=0.05, decay=1e-7)
 
         # Train in loop
