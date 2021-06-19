@@ -122,7 +122,7 @@ These elements affect the training process a lot:
 1. **Learing rate**
 2. How you choose to **initialize** the parameters
 
-Referrences
+References
 -----------
 1. [Neural Networks from Scratch in **X**](https://github.com/Sentdex/NNfSiX)
 2. [tinynn](https://github.com/borgwang/tinynn)
