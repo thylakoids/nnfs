@@ -69,6 +69,16 @@ class Layer:
 - [x] Activation_Softmax
 - [x] Loss_CategoricalCrossentropy
 - [x] Activation_Softmax_Loss_CategoricalCrossentropy
+- [x] SGD
+- [x] Momentum
+- [x] Nesterov
+- [x] Adagrad
+- [x] RMSprop
+- [x] Adam
+- [ ] Dropout
+- [ ] Batch Normalization
+- [ ] Convolution
+- [ ] Gaussian Process Optimization
 
 
 Numerical Differentiation
