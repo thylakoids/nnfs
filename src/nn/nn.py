@@ -136,6 +136,8 @@ class Layer:
                             print(doutput)
                             print('i, j, dx_ij_numerical, dx[i][j], diff:', i,
                                   j, dx_ij_numerical, dx[i][j], diff)
+                            import ipdb
+                            ipdb.set_trace()
                             raise AssertionError
                     # restore parameters and inputs
                     x[i][j] -= delta
@@ -652,3 +654,33 @@ class Optimizer_Adam(Optimizer):
         layer.set_cache('biases', bias_caches)
         layer.set_x('weights', weights)
         layer.set_x('biases', biases)
+
+
+class Layer_Dropout(Layer):
+    """
+    Note:
+        Gradient check would fail, because of np.random.
+    """
+    def __init__(self, rate):
+        super().__init__()
+        self.rate = 1 - rate
+
+    def forward(self, input=None) -> np.ndarray:
+        if input is not None:
+            self.set_x('input', input)
+        input = self.get_x('input')
+        if input is None:
+            raise ValueError("no input provided")
+
+        # -------------------------------
+        self.binary_mask = np.random.binomial(1, self.rate,
+                                              size=input.shape) / self.rate
+        self.output = input * self.binary_mask
+        # -------------------------------
+
+        return self.output
+
+    def backward(self, doutput):
+        dinput = doutput * self.binary_mask
+
+        self.set_dx('input', dinput)

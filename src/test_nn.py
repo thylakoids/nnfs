@@ -3,23 +3,26 @@ import numpy as np
 from nnfs.datasets import spiral_data
 
 from nn.nn import (Layer_Dense, Activation_Softmax, Activation_Sigmoid,
-                   Activation_ReLU, Loss_CategoricalCrossentropy,
+                   Activation_ReLU, Layer_Dropout,
+                   Loss_CategoricalCrossentropy,
                    Activation_Softmax_Loss_CategoricalCrossentropy,
                    Optimizer_Adadelta, Optimizer_Adagrad, Optimizer_Adam,
                    Optimizer_RMSprop, Optimizer_SGD)
 
-np.random.seed(0)
+# np.random.seed(0)
 
 
 class Testnn(unittest.TestCase):
     # X:300*2, y:300*1
     X, y = spiral_data(samples=100, classes=3)
+    X_test, y_test = spiral_data(samples=100, classes=3)
     plot = False
 
     def test_layer_gradient_checker(self):
         # define
         dense1 = Layer_Dense(2, 9)
         activation1 = Activation_ReLU()
+        dropout1 = Layer_Dropout(0.1)
         activation2 = Activation_Sigmoid()
         activation3 = Activation_Softmax()
         loss = Loss_CategoricalCrossentropy()
@@ -28,6 +31,7 @@ class Testnn(unittest.TestCase):
         # forward
         dense1.forward(self.X)
         activation1.forward(dense1.output)
+        dropout1.forward(activation1.output)
         activation2.forward(dense1.output)
         activation3.forward(dense1.output)
         loss.forward(activation3.output, self.y)
@@ -36,6 +40,7 @@ class Testnn(unittest.TestCase):
         # check
         dense1.check_gradient()
         activation1.check_gradient()
+        dropout1.check_gradient()
         activation2.check_gradient()
         activation3.check_gradient()
         loss.check_gradient()
@@ -51,16 +56,16 @@ class Testnn(unittest.TestCase):
 
         # create optimizer
         # optimizer = Optimizer_SGD(learning_rate=1, decay=1e-4)
-        # optimizer = Optimizer_SGD(learning_rate=1,
-        #                           decay=1e-3,
-        #                           momentum=0.9,
-        #                           nesterov=True)
+        optimizer = Optimizer_SGD(learning_rate=1,
+                                  decay=1e-3,
+                                  momentum=0.9,
+                                  nesterov=True)
         # optimizer = Optimizer_Adagrad(learning_rate=1, decay=0)
         # optimizer = Optimizer_RMSprop(learning_rate=0.02,
         #                               decay=1e-5,
         #                               rho=0.999)
         # optimizer = Optimizer_Adadelta()
-        optimizer = Optimizer_Adam(learning_rate=0.05, decay=1e-7)
+        # optimizer = Optimizer_Adam(learning_rate=0.05, decay=1e-7)
 
         # Train in loop
         for epoch in range(10001):
@@ -90,6 +95,21 @@ class Testnn(unittest.TestCase):
 
             # update parameters
             optimizer.update_params([dense1, dense2])
+
+        # validate
+        dense1.forward(self.X_test)
+        activation1.forward(dense1.output)
+
+        dense2.forward(activation1.output)
+        loss = loss_activation.forward(dense2.output, self.y_test)
+
+        # calculate accuracy
+        predictions = np.argmax(loss_activation.activation.output, axis=1)
+        if len(self.y_test.shape) == 2:
+            self.y = np.argmax(self.y_test, axis=1)
+        accuracy = np.mean(predictions == self.y_test)
+
+        print(f'validation: acc: {accuracy:.3f}, loss: {loss:.3f}')
 
 
 if __name__ == "__main__":
